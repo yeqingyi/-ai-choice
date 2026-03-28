@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Choice - 智能选择式问答</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤔 AI Choice</h1>
+            <p>智能分析你的问题，通过选择给出精准答案</p>
+        </header>
+
+        <main>
+            <!-- 阶段1: 输入问题 -->
+            <div id="step-question" class="step active">
+                <div class="input-group">
+                    <textarea 
+                        id="question-input" 
+                        placeholder="请输入你的问题..."
+                        rows="3"
+                    ></textarea>
+                    <button id="submit-question" class="btn-primary">
+                        <span>开始分析</span>
+                        <div class="spinner hidden"></div>
+                    </button>
+                </div>
+                <p class="hint">例如：山西旅游攻略、北京周末去哪玩、怎么学编程</p>
+            </div>
+
+            <!-- 阶段2: 显示选项 -->
+            <div id="step-choice" class="step">
+                <div class="choice-header">
+                    <h2>请选择你的偏好</h2>
+                    <p id="choice-context"></p>
+                </div>
+                <div id="choices-container" class="choices"></div>
+                <button id="submit-choice" class="btn-primary" disabled>
+                    <span>生成答案</span>
+                    <div class="spinner hidden"></div>
+                </button>
+            </div>
+
+            <!-- 阶段3: 显示结果 -->
+            <div id="step-result" class="step">
+                <div class="result-header">
+                    <h2>✨ 答案</h2>
+                    <button id="restart" class="btn-secondary">开始新问题</button>
+                </div>
+                <div id="result-content" class="result-content"></div>
+                <div id="meta-info" class="meta-info"></div>
+            </div>
+
+            <!-- 加载状态 -->
+            <div id="loading-overlay" class="loading-overlay hidden">
+                <div class="loading-content">
+                    <div class="thinking-animation">
+                        <span>🤔</span>
+                        <span>💭</span>
+                        <span>✨</span>
+                    </div>
+                    <p id="loading-text">AI正在分析你的问题...</p>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by GPT-4 · 选择更精准，回答更贴心</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
