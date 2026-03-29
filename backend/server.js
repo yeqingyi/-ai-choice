@@ -5,20 +5,58 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const OpenAI = require('openai');
+const { Configuration, OpenAIApi } = require('openai');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 初始化 OpenAI
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_PLACEHOLDER
+const configuration = new Configuration({
+    apiKey: process.env.OPENAI_API_KEY || 'sk-placeholder'
 });
+const openai = new OpenAIApi(configuration);
 
 // 中间件
 app.use(cors());
 app.use(express.json());
 app.use(express.static('../frontend'));
+
+// 演示数据库
+const demoData = {
+    '山西旅游攻略': {
+        context: '根据你的景点偏好，我来推荐最适合的路线',
+        choices: [
+            { icon: '🏔️', text: '山水风光', desc: '五台山、壶口瀑布等' },
+            { icon: '🏛️', text: '古建筑', desc: '平遥古城、应县木塔等' },
+            { icon: '🍜', text: '地道美食', desc: '刀削面、老陈醋等' },
+            { icon: '🎭', text: '文化遗产', desc: '晋商文化、民俗风情' },
+            { icon: '⛩️', text: '宗教圣地', desc: '五台山、悬空寺等' },
+            { icon: '🎨', text: '艺术工艺', desc: '剪纸、陶瓷、漆器' }
+        ]
+    },
+    '怎么学编程': {
+        context: '根据你的学习方向和目标，我来推荐学习路线',
+        choices: [
+            { icon: '📱', text: '移动开发', desc: 'iOS/Android' },
+            { icon: '🌐', text: '前端开发', desc: 'Web/React/Vue' },
+            { icon: '⚙️', text: '后端开发', desc: 'Node/Python/Java' },
+            { icon: '📊', text: '数据科学', desc: 'Python/机器学习' },
+            { icon: '🎮', text: '游戏开发', desc: 'Unity/Unreal' },
+            { icon: '🔐', text: '网络安全', desc: '渗透测试/安全' }
+        ]
+    },
+    '北京周末去哪玩': {
+        context: '根据你的兴趣和出行方式，我来推荐景点',
+        choices: [
+            { icon: '🌳', text: '户外自然', desc: '公园、山区' },
+            { icon: '🏛️', text: '历史文化', desc: '故宫、长城等' },
+            { icon: '🎨', text: '艺术展览', desc: '美术馆、博物馆' },
+            { icon: '🍽️', text: '美食体验', desc: '特色餐厅、夜市' },
+            { icon: '🛍️', text: '购物逛街', desc: '商业街、商场' },
+            { icon: '👨‍👩‍👧', text: '亲子活动', desc: '动物园、游乐园' }
+        ]
+    }
+};
 
 // ============================================
 // API: 分析问题，生成选项
@@ -31,7 +69,16 @@ app.post('/api/analyze', async (req, res) => {
             return res.status(400).json({ error: '请提供问题' });
         }
 
-        const prompt = `你是一个智能问题分析助手。用户提问后，你需要：
+        // 检查演示数据
+        for (const key in demoData) {
+            if (question.includes(key)) {
+                return res.json(demoData[key]);
+            }
+        }
+
+        // 如果有真实API Key，调用OpenAI
+        if (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.includes('placeholder')) {
+            const prompt = `你是一个智能问题分析助手。用户提问后，你需要：
 1. 分析问题的核心意图
 2. 识别可能影响答案的关键偏好维度
 3. 为每个维度生成3-5个具体的选项
@@ -57,22 +104,27 @@ app.post('/api/analyze', async (req, res) => {
 - 选项要有区分度，避免相似选项
 - 确保选项覆盖常见的偏好类型
 
-示例：
-用户问"山西旅游攻略"，应该生成关于景点类型偏好的选项（山水、古建筑、美食、文化等）
-用户问"怎么学编程"，应该生成关于学习方向偏好的选项（前端、后端、移动端、数据等）
-
 只返回JSON，不要其他内容。`;
 
-        const completion = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.7,
-            response_format: { type: 'json_object' }
-        });
+            const completion = await openai.createChatCompletion({
+                model: 'gpt-4o-mini',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.7
+            });
 
-        const result = JSON.parse(completion.choices[0].message.content);
-        
-        res.json(result);
+            const result = JSON.parse(completion.data.choices[0].message.content);
+            return res.json(result);
+        }
+
+        // 没有API Key，返回通用演示数据
+        res.json({
+            context: '根据你的偏好，我来给出精准建议',
+            choices: [
+                { icon: '✨', text: '选项1', desc: '演示选项' },
+                { icon: '🎯', text: '选项2', desc: '演示选项' },
+                { icon: '💡', text: '选项3', desc: '演示选项' }
+            ]
+        });
         
     } catch (error) {
         console.error('Analyze error:', error);
@@ -94,7 +146,29 @@ app.post('/api/generate', async (req, res) => {
             return res.status(400).json({ error: '参数不完整' });
         }
 
-        const prompt = `用户问题：${question}
+        // 演示答案
+        if (question.includes('山西旅游')) {
+            const answers = {
+                '山水风光': '**五台山**（佛教圣地+自然风光）\n- 推荐游览：菩萨顶、黛螺顶、南山寺\n- 最佳时间：6-9月\n\n**壶口瀑布**\n- 黄河上最大的瀑布\n- 建议停留：半天',
+                '古建筑': '**平遥古城**（世界文化遗产）\n- 必看：日升昌票号、县衙、城墙\n- 建议停留：1天\n\n**应县木塔**\n- 世界最高木塔，千年不倒',
+                '地道美食': '**太原美食**\n- 刀削面：老太原刀削面\n- 老陈醋：东湖醋园\n\n**平遥美食**\n- 平遥牛肉、碗托、栲栳栳',
+                '文化遗产': '**晋商文化**\n- 乔家大院、常家庄园\n- 了解晋商辉煌历史\n\n**民俗体验**\n- 平遥古城年节活动',
+                '宗教圣地': '**五台山**\n- 文殊菩萨道场\n- 建议2-3天深度游\n\n**悬空寺**\n- 恒山脚下，建在悬崖上',
+                '艺术工艺': '**平遥漆器**\n- 推漆技艺，非遗传承\n\n**山西剪纸**\n- 民间艺术，适合带伴手礼'
+            };
+            
+            let result = '## 🎯 根据你的选择，推荐以下行程\n\n';
+            selectedChoices.forEach(choice => {
+                if (answers[choice]) {
+                    result += answers[choice] + '\n\n';
+                }
+            });
+            return res.json({ result });
+        }
+
+        // 如果有真实API Key，调用OpenAI
+        if (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.includes('placeholder')) {
+            const prompt = `用户问题：${question}
 
 用户选择的偏好：${selectedChoices.join('、')}
 
@@ -109,16 +183,21 @@ app.post('/api/generate', async (req, res) => {
 
 用自然的语气回答，像朋友聊天一样亲切。`;
 
-        const completion = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.7,
-            max_tokens: 1000
-        });
+            const completion = await openai.createChatCompletion({
+                model: 'gpt-4o-mini',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.7,
+                max_tokens: 1000
+            });
 
-        const result = completion.choices[0].message.content;
-        
-        res.json({ result });
+            const result = completion.data.choices[0].message.content;
+            return res.json({ result });
+        }
+
+        // 演示模式
+        res.json({ 
+            result: `## ✨ 演示答案\n\n你选择了：**${selectedChoices.join('、')}**\n\n这是一个演示模式。配置真实的OpenAI API Key后，AI会根据你的选择生成精准的回答。\n\n### 📌 如何配置\n1. 获取 OpenAI API Key\n2. 在 backend/.env 文件中设置\n3. 重启服务` 
+        });
         
     } catch (error) {
         console.error('Generate error:', error);
