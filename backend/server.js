@@ -10,9 +10,52 @@ const { Configuration, OpenAIApi } = require('openai');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 初始化 OpenAI
+// ============================================
+// 配置说明
+// ============================================
+//
+// 方式1: 硅基流动 (推荐，免费模型)
+// - 注册: https://cloud.siliconflow.cn
+// - API Key: 个人中心 -> API密钥
+// - 免费模型: Qwen2.5-7B, GLM-4, DeepSeek-V2.5
+//
+// 方式2: OpenAI (需要科学上网)
+// - 设置 OPENAI_API_KEY
+//
+// 方式3: 阿里云DashScope (通义千问)
+// - 注册: https://dashscope.console.aliyun.com
+// - 设置 DASHSCOPE_API_KEY
+// - 免费额度: 100万Tokens/月
+//
+// 方式4: 智谱AI
+// - 注册: https://open.bigmodel.cn
+// - 设置 ZHIPU_API_KEY
+// - 免费额度: 100万Tokens/月
+//
+
+// 检测使用的AI服务
+const USE_PROVIDER = process.env.AI_PROVIDER || 'siliconflow'; // siliconflow | openai | dashscope | zhipu
+
+let apiKey = '';
+let baseURL = 'https://api.openai.com/v1';
+
+if (USE_PROVIDER === 'siliconflow') {
+    apiKey = process.env.SILICONFLOW_API_KEY || '';
+    baseURL = 'https://api.siliconflow.cn/v1';
+} else if (USE_PROVIDER === 'dashscope') {
+    apiKey = process.env.DASHSCOPE_API_KEY || '';
+    baseURL = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+} else if (USE_PROVIDER === 'zhipu') {
+    apiKey = process.env.ZHIPU_API_KEY || '';
+    baseURL = 'https://open.bigmodel.cn/api/paas/v4';
+} else {
+    apiKey = process.env.OPENAI_API_KEY || '';
+}
+
+// 初始化 OpenAI 客户端
 const configuration = new Configuration({
-    apiKey: process.env.OPENAI_API_KEY || 'sk-placeholder'
+    apiKey: apiKey,
+    basePath: baseURL
 });
 const openai = new OpenAIApi(configuration);
 
@@ -76,8 +119,8 @@ app.post('/api/analyze', async (req, res) => {
             }
         }
 
-        // 如果有真实API Key，调用OpenAI
-        if (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.includes('placeholder')) {
+        // 如果有真实API Key，调用AI
+        if (apiKey && !apiKey.includes('placeholder')) {
             const prompt = `你是一个智能问题分析助手。用户提问后，你需要：
 1. 分析问题的核心意图
 2. 识别可能影响答案的关键偏好维度
@@ -106,8 +149,18 @@ app.post('/api/analyze', async (req, res) => {
 
 只返回JSON，不要其他内容。`;
 
+            // 根据provider选择模型
+            let model = 'gpt-4o-mini';
+            if (USE_PROVIDER === 'siliconflow') {
+                model = 'Qwen/Qwen2.5-7B-Instruct';
+            } else if (USE_PROVIDER === 'dashscope') {
+                model = 'qwen-plus';
+            } else if (USE_PROVIDER === 'zhipu') {
+                model = 'glm-4-flash';
+            }
+
             const completion = await openai.createChatCompletion({
-                model: 'gpt-4o-mini',
+                model: model,
                 messages: [{ role: 'user', content: prompt }],
                 temperature: 0.7
             });
@@ -166,8 +219,8 @@ app.post('/api/generate', async (req, res) => {
             return res.json({ result });
         }
 
-        // 如果有真实API Key，调用OpenAI
-        if (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.includes('placeholder')) {
+        // 如果有真实API Key，调用AI
+        if (apiKey && !apiKey.includes('placeholder')) {
             const prompt = `用户问题：${question}
 
 用户选择的偏好：${selectedChoices.join('、')}
@@ -183,8 +236,18 @@ app.post('/api/generate', async (req, res) => {
 
 用自然的语气回答，像朋友聊天一样亲切。`;
 
+            // 根据provider选择模型
+            let model = 'gpt-4o-mini';
+            if (USE_PROVIDER === 'siliconflow') {
+                model = 'Qwen/Qwen2.5-7B-Instruct';
+            } else if (USE_PROVIDER === 'dashscope') {
+                model = 'qwen-plus';
+            } else if (USE_PROVIDER === 'zhipu') {
+                model = 'glm-4-flash';
+            }
+
             const completion = await openai.createChatCompletion({
-                model: 'gpt-4o-mini',
+                model: model,
                 messages: [{ role: 'user', content: prompt }],
                 temperature: 0.7,
                 max_tokens: 1000
@@ -196,7 +259,7 @@ app.post('/api/generate', async (req, res) => {
 
         // 演示模式
         res.json({ 
-            result: `## ✨ 演示答案\n\n你选择了：**${selectedChoices.join('、')}**\n\n这是一个演示模式。配置真实的OpenAI API Key后，AI会根据你的选择生成精准的回答。\n\n### 📌 如何配置\n1. 获取 OpenAI API Key\n2. 在 backend/.env 文件中设置\n3. 重启服务` 
+            result: `## ✨ 演示答案\n\n你选择了：**${selectedChoices.join('、')}**\n\n这是一个演示模式。配置真实的API Key后，AI会根据你的选择生成精准的回答。\n\n### 📌 如何配置\n1. 获取 API Key（硅基流动/阿里云/智谱等）\n2. 在 backend/.env 文件中设置\n3. 重启服务` 
         });
         
     } catch (error) {
@@ -212,7 +275,12 @@ app.post('/api/generate', async (req, res) => {
 // 健康检查
 // ============================================
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        provider: USE_PROVIDER,
+        hasApiKey: !!apiKey && !apiKey.includes('placeholder')
+    });
 });
 
 // ============================================
@@ -221,10 +289,15 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, () => {
     console.log(`\n🚀 AI Choice 服务已启动`);
     console.log(`   前端地址: http://localhost:${PORT}`);
-    console.log(`   API地址: http://localhost:${PORT}/api\n`);
+    console.log(`   API地址: http://localhost:${PORT}/api`);
+    console.log(`   AI提供商: ${USE_PROVIDER}\n`);
     
-    if (!process.env.OPENAI_API_KEY) {
-        console.log('⚠️  警告: 未设置 OPENAI_API_KEY 环境变量');
-        console.log('   请在 .env 文件中设置你的 API Key\n');
+    if (!apiKey || apiKey.includes('placeholder')) {
+        console.log('⚠️  当前使用演示模式');
+        console.log('   配置API Key后可使用真实AI模型\n');
+        console.log('📌 快速配置:');
+        console.log('   1. 硅基流动 (推荐): https://cloud.siliconflow.cn');
+        console.log('   2. 阿里云: https://dashscope.console.aliyun.com');
+        console.log('   3. 智谱AI: https://open.bigmodel.cn\n');
     }
 });
